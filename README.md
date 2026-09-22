@@ -1,5 +1,10 @@
 # dontorrent-plugin
-dontorrent search plugin for qbittorrent
+Plugin de búsqueda de DONTORRENT para qBittorrent. Busca ÚNICAMENTE en DONTORRENT (sitio exclusivo).
+
+## Características
+- **Dominio automático**: El plugin detecta automáticamente el dominio activo de DONTORRENT y utiliza dominios de respaldo oficiales si es necesario.
+- **Protección Anubis**: Incluye resolvedor nativo de la protección anti-bot Anubis (PoW basado en SHA-256).
+- **Búsqueda exclusiva**: Solo busca en DONTORRENT, sin otros sitios.
 
 # Installation
 

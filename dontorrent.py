@@ -78,21 +78,50 @@ class dontorrent(object):
         self.valid_domain = None
         self.anubis_solver = AnubisSolver()
 
+    def _is_dt_domain(self, domain):
+        if not domain.startswith('http'):
+            domain = 'https://' + domain
+        try:
+            req = urllib.request.Request(domain, headers={'User-Agent': self.user_agent})
+            response = self.no_redirect_opener.open(req, timeout=10)
+            content = response.read().decode('utf-8', errors='ignore')
+        except Exception:
+            return False
+        return 'anubis_challenge' in content or 'DonTorrent' in content or 'pelicula' in content.lower()
+
+    def _telegram_domains(self):
+        domains = []
+        try:
+            req = urllib.request.Request('https://t.me/s/DonTorrent', headers={'User-Agent': self.user_agent})
+            html = urllib.request.urlopen(req, timeout=15).read().decode('utf-8', errors='ignore')
+            texts = re.findall(r'class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', html, re.S)
+            for text in texts:
+                match = re.search(r'(?i)\b(dontorrent\.[a-z0-9]{2,12})\b', text)
+                if match and match.group(1).lower() not in domains:
+                    domains.append(match.group(1).lower())
+            domains.reverse()
+            for match in re.finditer(r'(?i)\b(dontorrent\.[a-z0-9]{2,12})\b', html):
+                domain = match.group(1).lower()
+                if domain not in domains:
+                    domains.append(domain)
+        except Exception:
+            pass
+        return domains
+
     def _resolve_domain(self):
         if self.valid_domain:
             return self.valid_domain
 
         domains_to_try = [self.url] + self.FALLBACK_DOMAINS
         for domain in domains_to_try:
-            try:
-                req = urllib.request.Request(domain, headers={'User-Agent': self.user_agent})
-                response = self.opener.open(req, timeout=10)
-                content = response.read().decode('utf-8', errors='ignore')
-                if 'anubis_challenge' in content or 'DonTorrent' in content or 'pelicula' in content.lower():
-                    self.valid_domain = domain
-                    return domain
-            except Exception:
-                continue
+            if self._is_dt_domain(domain):
+                self.valid_domain = domain
+                return self.valid_domain
+
+        for domain in self._telegram_domains():
+            if self._is_dt_domain(domain):
+                self.valid_domain = 'https://' + domain if not domain.startswith('http') else domain
+                return self.valid_domain
 
         self.valid_domain = self.url
         return self.valid_domain

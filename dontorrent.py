@@ -10,7 +10,13 @@ import time
 import tempfile
 import urllib.request
 import urllib.parse
+import urllib.error
 import http.cookiejar
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 class AnubisSolver:
@@ -60,10 +66,10 @@ class dontorrent(object):
     def __init__(self):
         self.cj = http.cookiejar.CookieJar()
         handler = urllib.request.HTTPCookieProcessor(self.cj)
-        # Don't follow redirects automatically - we need to capture the cookie from 302
         opener = urllib.request.build_opener(handler, urllib.request.HTTPRedirectHandler())
         opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')]
         self.opener = opener
+        self.no_redirect_opener = urllib.request.build_opener(_NoRedirect())
         self.valid_domain = None
         self.anubis_solver = AnubisSolver()
     
@@ -87,7 +93,7 @@ class dontorrent(object):
         return self.valid_domain
     
     def _solve_anubis(self, html, original_url):
-        match = re.search(r'<script id="anubis_challenge"[^>]*>(\{[\s\S]*?\})</script>', html)
+        match = re.search(r'<script[^>]*id="anubis_challenge"[^>]*>\s*(\{[\s\S]*?\})\s*</script>', html)
         if not match:
             return False
         
@@ -121,12 +127,15 @@ class dontorrent(object):
         
         try:
             req = urllib.request.Request(pass_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-            response = self.opener.open(req, timeout=10)
-            if 'Set-Cookie' in response.headers:
-                self.cj.extract_cookies(response, req)
-            return True
+            self.no_redirect_opener.open(req, timeout=10)
+        except urllib.error.HTTPError as e:
+            if e.code in (301, 302, 303, 307, 308) and e.headers.get_all('Set-Cookie'):
+                self.cj.extract_cookies(e, req)
+                return True
+            return False
         except Exception:
             return False
+        return True
     
     def _fetch_with_anubis(self, url):
         domain = self._resolve_domain()
@@ -158,6 +167,14 @@ class dontorrent(object):
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
             response = self.opener.open(req, timeout=15)
             torrent_data = response.read()
+            
+            if not torrent_data.startswith(b'd8:') or b'anubis_challenge' in torrent_data:
+                html_decoded = torrent_data.decode('utf-8', errors='ignore')
+                if 'anubis_challenge' in html_decoded:
+                    if self._solve_anubis(html_decoded, url):
+                        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+                        response = self.opener.open(req, timeout=15)
+                        torrent_data = response.read()
             
             tmp_file = tempfile.NamedTemporaryFile(mode='wb', suffix='.torrent', delete=False)
             tmp_file.write(torrent_data)

@@ -47,7 +47,7 @@ class dontorrent(object):
     }
     
     FALLBACK_DOMAINS = [
-        'https://doitorrent.moi',
+        'https://dontorrent.moi',
         'https://dontorrent.supply',
         'https://dontorrent.soccer',
         'https://dontorrent.management',
@@ -59,11 +59,13 @@ class dontorrent(object):
     
     def __init__(self):
         self.cj = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cj))
-        self.opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')]
+        handler = urllib.request.HTTPCookieProcessor(self.cj)
+        # Don't follow redirects automatically - we need to capture the cookie from 302
+        opener = urllib.request.build_opener(handler, urllib.request.HTTPRedirectHandler())
+        opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')]
+        self.opener = opener
         self.valid_domain = None
         self.anubis_solver = AnubisSolver()
-        self._resolve_domain()
     
     def _resolve_domain(self):
         if self.valid_domain:
@@ -85,7 +87,7 @@ class dontorrent(object):
         return self.valid_domain
     
     def _solve_anubis(self, html, original_url):
-        match = re.search(r'<script id="anubis_challenge" type="application/json">(\{.*?\})</script>', html)
+        match = re.search(r'<script id="anubis_challenge"[^>]*>(\{[\s\S]*?\})</script>', html)
         if not match:
             return False
         
@@ -120,6 +122,8 @@ class dontorrent(object):
         try:
             req = urllib.request.Request(pass_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
             response = self.opener.open(req, timeout=10)
+            if 'Set-Cookie' in response.headers:
+                self.cj.extract_cookies(response, req)
             return True
         except Exception:
             return False

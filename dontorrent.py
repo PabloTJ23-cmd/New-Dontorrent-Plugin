@@ -7,6 +7,7 @@ import re
 import json
 import hashlib
 import time
+import sys
 import tempfile
 import urllib.request
 import urllib.parse
@@ -269,6 +270,7 @@ class dontorrent(object):
             tmp_file.write(torrent_data)
             tmp_file.close()
             print(tmp_file.name)
+            sys.stdout.flush()
         except Exception:
             pass
 

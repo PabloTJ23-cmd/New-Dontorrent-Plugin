@@ -269,7 +269,7 @@ class dontorrent(object):
             tmp_file = tempfile.NamedTemporaryFile(mode='wb', suffix='.torrent', delete=False)
             tmp_file.write(torrent_data)
             tmp_file.close()
-            print(tmp_file.name)
+            print(f"{tmp_file.name} {url}")
             sys.stdout.flush()
         except Exception:
             pass
